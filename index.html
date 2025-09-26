@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Cafe24 주문 현황 (Vercel Serverless)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .header p { font-size: 1.1em; opacity: 0.9; }
+
+        .status-bar {
+            padding: 15px 30px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .status-loading { background: #fff3e0; color: #ef6c00; }
+        .status-success { background: #e8f5e9; color: #2e7d2e; }
+        .status-error { background: #ffebee; color: #c62828; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            border-left: 5px solid #FF6B6B;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+        }
+
+        .stat-card h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .stat-number {
+            color: #FF6B6B;
+            font-size: 3.2em;
+            font-weight: bold;
+            margin: 15px 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-period {
+            color: #666;
+            font-size: 0.9em;
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .controls {
+            padding: 25px 30px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(45deg, #6C5CE7, #74B9FF);
+            box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 6px 20px rgba(108, 92, 231, 0.4);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #FF6B6B;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .api-info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 20px;
+            margin: 20px 30px;
+            border-radius: 8px;
+        }
+
+        .api-info h3 { color: #1976d2; margin-bottom: 10px; }
+        .api-url {
+            background: #f5f5f5;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+            margin: 5px 0;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            background: #f8f9fa;
+        }
+
+        .footer p { margin: 5px 0; }
+
+        @media (max-width: 768px) {
+            .container { margin: 10px; border-radius: 15px; }
+            .header h1 { font-size: 2em; }
+            .stats-grid { grid-template-columns: 1fr; padding: 20px; }
+            .controls { flex-direction: column; text-align: center; }
+            .btn-group { justify-content: center; }
+        }
+
+        .error-card {
+            background: #ffebee;
+            border-left: 5px solid #f44336;
+            color: #c62828;
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Cafe24 주문 현황</h1>
+            <p>Vercel Serverless로 구동되는 실시간 대시보드</p>
+        </div>
+
+        <div id="status" class="status-bar status-loading">
+            <div class="loading"></div>
+            Vercel 서버리스 함수 호출 중...
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <!-- 동적 생성 -->
+        </div>
+
+        <div class="api-info">
+            <h3>🔗 API 엔드포인트</h3>
+            <div class="api-url" id="baseUrl">로딩 중...</div>
+            <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                이 API들은 Vercel 서버리스 함수로 구동되며, 자동 스케일링과 전 세계 CDN을 통해 빠른 응답을 제공합니다.
+            </p>
+        </div>
+
+        <div class="controls">
+            <div>
+                <span id="lastUpdate">마지막 업데이트: 로딩 중...</span>
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="loadDashboard()" id="refreshBtn">
+                    🔄 전체 새로고침
+                </button>
+                <button class="btn btn-secondary" onclick="testSingleAPI()" id="testBtn">
+                    🧪 단일 API 테스트
+                </button>
+                <button class="btn btn-secondary" onclick="toggleAutoRefresh()" id="autoBtn">
+                    ⏰ 자동갱신 켜기
+                </button>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>🌐 Vercel Serverless 장점</strong></p>
+            <p>✅ 자동 스케일링 | ✅ 전 세계 CDN | ✅ 무서버 아키텍처 | ✅ 제로 다운타임</p>
+            <p>🔒 API 키는 Vercel 환경변수로 안전하게 보호됩니다</p>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval = null;
+        const baseUrl = window.location.origin;
+
+        const STAT_CONFIG = {
+            today: { title: '📅 오늘 주문', color: '#FF6B6B', icon: '📅' },
+            yesterday: { title: '📋 어제 주문', color: '#74B9FF', icon: '📋' },
+            week: { title: '📈 주간 주문', color: '#FDCB6E', icon: '📈' },
+            month: { title: '📊 월간 주문', color: '#6C5CE7', icon: '📊' }
+        };
+
+        function updateStatus(message, type = 'loading') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status-bar status-${type}`;
+
+            const icons = { loading: '🔄', success: '✅', error: '❌' };
+            const icon = icons[type] || '🔄';
+
+            statusDiv.innerHTML = type === 'loading' ?
+                `<div class="loading"></div>${message}` :
+                `${icon} ${message}`;
+        }
+
+        function showApiInfo() {
+            document.getElementById('baseUrl').textContent = `${baseUrl}/api/orders`;
+        }
+
+        async function makeRequest(endpoint) {
+            const url = `${baseUrl}/api/orders${endpoint}`;
+            console.log('API 호출:', url);
+
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return response.json();
+        }
+
+        async function loadDashboard() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<div class="loading"></div> 로딩 중...';
+
+            updateStatus('대시보드 데이터 로딩 중...', 'loading');
+
+            try {
+                const data = await makeRequest('?action=dashboard');
+                displayStats(data);
+                updateStatus(`성공적으로 로드됨 (${new Date().toLocaleTimeString()})`, 'success');
+
+                document.getElementById('lastUpdate').textContent =
+                    `마지막 업데이트: ${new Date(data.last_updated).toLocaleString()}`;
+
+            } catch (error) {
+                console.error('대시보드 로딩 실패:', error);
+                displayError(error.message);
+                updateStatus(`로딩 실패: ${error.message}`, 'error');
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '🔄 전체 새로고침';
+            }
+        }
+
+        async function testSingleAPI() {
+            const testBtn = document.getElementById('testBtn');
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<div class="loading"></div> 테스트 중...';
+
+            updateStatus('단일 API 테스트 중...', 'loading');
+
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const data = await makeRequest(`?action=count&start_date=${today}&end_date=${today}`);
+
+                updateStatus(`단일 API 테스트 성공: ${data.count || 0}건`, 'success');
+
+                // 테스트 결과를 첫 번째 카드에 표시
+                const firstCard = document.querySelector('.stat-card');
+                if (firstCard) {
+                    firstCard.querySelector('.stat-number').textContent = data.count || 0;
+                    firstCard.style.borderLeftColor = '#00D68F';
+                    firstCard.style.background = '#e8f5e9';
+                }
+
+            } catch (error) {
+                console.error('API 테스트 실패:', error);
+                updateStatus(`테스트 실패: ${error.message}`, 'error');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.innerHTML = '🧪 단일 API 테스트';
+            }
+        }
+
+        function displayStats(data) {
+            const statsGrid = document.getElementById('statsGrid');
+            let html = '';
+
+            for (const [key, config] of Object.entries(STAT_CONFIG)) {
+                const statData = data.data[key];
+                const count = statData?.count ?? '오류';
+                const period = statData?.period ?? '데이터 없음';
+
+                html += `
+                    <div class="stat-card" style="border-left-color: ${config.color}">
+                        <h3>${config.icon} ${config.title}</h3>
+                        <div class="stat-number" style="color: ${config.color}">${count}</div>
+                        <div class="stat-period">${period}</div>
+                        ${statData?.error ? `
+                            <div style="color: #c62828; font-size: 0.8em; margin-top: 10px; padding: 8px; background: #ffebee; border-radius: 8px;">
+                                오류: ${statData.error}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            statsGrid.innerHTML = html;
+        }
+
+        function displayError(message) {
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = `
+                <div class="stat-card error-card">
+                    <h3>⚠️ 서버리스 함수 오류</h3>
+                    <div style="margin: 20px 0; font-size: 1.1em;">${message}</div>
+                    <div style="font-size: 0.9em; margin-top: 15px;">
+                        <strong>확인 사항:</strong><br>
+                        1. Vercel 환경변수가 설정되어 있는지 확인<br>
+                        2. Cafe24 API 토큰이 유효한지 확인<br>
+                        3. 배포가 정상적으로 완료되었는지 확인
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleAutoRefresh() {
+            const btn = document.getElementById('autoBtn');
+
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                btn.textContent = '⏰ 자동갱신 켜기';
+                btn.className = 'btn btn-secondary';
+            } else {
+                autoRefreshInterval = setInterval(loadDashboard, 300000); // 5분마다
+                btn.textContent = '⏸️ 자동갱신 끄기';
+                btn.className = 'btn';
+            }
+        }
+
+        // 페이지 초기화
+        window.addEventListener('load', function() {
+            console.log('Vercel Serverless Dashboard 초기화');
+            showApiInfo();
+            loadDashboard();
+
+            // 페이지 표시될 때마다 새로고침
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden && !autoRefreshInterval) {
+                    loadDashboard();
+                }
+            });
+        });
+
+        // 에러 핸들링
+        window.addEventListener('error', function(e) {
+            console.error('페이지 오류:', e.error);
+            updateStatus('페이지에서 JavaScript 오류가 발생했습니다', 'error');
+        });
+    </script>
+</body>
+</html>
